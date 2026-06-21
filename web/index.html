@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FTE Payroll & Productivity Dashboard</title>
+    <!-- Google Fonts: Outfit & Noto Sans Thai -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+Thai:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Link CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo-area">
+                <i class="fa-solid fa-chart-pie logo-icon"></i>
+                <span class="logo-text">FTE<span class="highlight">Productivity</span></span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" id="btn-dash"><i class="fa-solid fa-table-list"></i> Summarize Dashboard</a>
+                <a href="#" class="nav-item" id="btn-data"><i class="fa-solid fa-circle-info"></i> Detail Explorer</a>
+                <a href="#" class="nav-item" id="btn-config"><i class="fa-solid fa-sliders"></i> Credentials</a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-badge" id="db-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Disconnected</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h1 id="page-title">บอร์ดสรุปประสิทธิภาพภาพรวม</h1>
+                    <p class="subtitle" id="page-subtitle">แสดงข้อมูลวิเคราะห์ FTE และ Productivity ผ่าน Supabase ETL</p>
+                </div>
+                <div class="user-profile">
+                    <span id="current-year-badge" class="year-badge">ปี 2026</span>
+                    <button class="btn btn-primary" id="btn-refresh"><i class="fa-solid fa-arrows-rotate"></i> ดึงข้อมูลล่าสุด</button>
+                </div>
+            </header>
+
+            <!-- 1. SUMMARIZE DASHBOARD VIEW -->
+            <section class="view-section active" id="view-dashboard">
+                <!-- Dashboard Filters Toolbar -->
+                <div class="card filter-card toolbar" style="margin-bottom: 2rem; padding: 1.2rem;">
+                    <div class="filter-controls-left">
+                        <span style="font-weight: 700; margin-right: 1rem; color: var(--text-primary);"><i class="fa-solid fa-filter"></i> ตัวกรองหลัก:</span>
+                        <select id="dash-filter-dept" class="filter-select">
+                            <option value="XD">XD (Cross Docking)</option>
+                            <option value="WH_NO_CMG">Office Warehouse - Fashion (ไม่รวม CMG/GG)</option>
+                            <option value="WH_YES_CMG">Office Warehouse - Fashion (รวม CMG/GG)</option>
+                            <option value="Online">Online Warehouse</option>
+                        </select>
+                        <select id="dash-filter-month" class="filter-select">
+                            <option value="2026-05">พฤษภาคม 2026</option>
+                            <option value="2026-06" selected>มิถุนายน 2026</option>
+                        </select>
+                    </div>
+                    <div id="projection-badge-area">
+                        <!-- Alert/Badge if month is incomplete -->
+                    </div>
+                </div>
+
+                <!-- KPI Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper sales">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Net Total FTE</span>
+                            <h3 class="stat-val" id="stat-net-fte">0</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper transactions">
+                            <i class="fa-solid fa-box"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Volume (Actual)</span>
+                            <h3 class="stat-val" id="stat-vol-actual">0</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper region">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Volume (Landing)</span>
+                            <h3 class="stat-val" id="stat-vol-landing">0</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper category" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                            <i class="fa-solid fa-gauge-simple-high"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Productivity / Month (Actual)</span>
+                            <h3 class="stat-val" id="stat-prod-actual">0</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper category">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Productivity / Month (Landing)</span>
+                            <h3 class="stat-val" id="stat-prod-landing">0</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Tables Card -->
+                <div class="card summary-table-card" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3><i class="fa-solid fa-table"></i> ตารางวิเคราะห์ตามศูนย์ต้นทุน</h3>
+                        <small style="color: var(--text-secondary);">*คลิกที่ศูนย์ต้นทุนที่ต้องการเพื่อดูประวัติรายวัน</small>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table summary-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Cost Center</th>
+                                    <th>Cost Center Name</th>
+                                    <th class="highlight-col">Net Total FTE</th>
+                                    <th>Volume (Actual)</th>
+                                    <th>Volume (Landing)</th>
+                                    <th>Productivity (Actual)</th>
+                                    <th>Productivity (Landing)</th>
+                                    <th>FTE Normal</th>
+                                    <th>FTE OT</th>
+                                    <th>Adjust FTE Normal -</th>
+                                    <th>Adjust FTE OT -</th>
+                                    <th>Adjust FTE Normal +</th>
+                                    <th>Adjust FTE OT +</th>
+                                    <th>OS FTE Normal</th>
+                                    <th>OS FTE OT</th>
+                                </tr>
+                            </thead>
+                            <tbody id="summary-table-body">
+                                <tr>
+                                    <td colspan="16" class="empty-state">กำลังโหลดข้อมูลและคำนวณสรุปผล...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. DETAIL EXPLORER VIEW (Drill Down) -->
+            <section class="view-section" id="view-data">
+                <!-- Drill Down Filters Toolbar -->
+                <div class="card filter-card toolbar" style="margin-bottom: 2rem; padding: 1.2rem;">
+                    <div class="filter-controls-left">
+                        <span style="font-weight: 700; margin-right: 1rem; color: var(--text-primary);"><i class="fa-solid fa-magnifying-glass-chart"></i> วิเคราะห์ราย Cost Center:</span>
+                        <select id="detail-filter-cc" class="filter-select">
+                            <option value="">-- กรุณาเลือกศูนย์ต้นทุน --</option>
+                        </select>
+                        <select id="detail-filter-month" class="filter-select">
+                            <option value="2026-05">พฤษภาคม 2026</option>
+                            <option value="2026-06" selected>มิถุนายน 2026</option>
+                        </select>
+                    </div>
+                    <div id="detail-cc-info" class="year-badge" style="background: rgba(59, 130, 246, 0.1); color: var(--info); border-color: rgba(59, 130, 246, 0.2);">
+                        กรุณาเลือกศูนย์ต้นทุนหลัก
+                    </div>
+                </div>
+
+                <!-- Detail KPI Stats Cards -->
+                <div class="stats-grid" style="margin-bottom: 2rem;">
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper transactions">
+                            <i class="fa-solid fa-box"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Throughput / Volume (Actual vs Landing)</span>
+                            <h3 class="stat-val" id="detail-stat-vol">0 / 0</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper sales">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Net Total FTE (Actual vs Landing)</span>
+                            <h3 class="stat-val" id="detail-stat-fte">0.000 / 0.000</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper category">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-label">Productivity (Actual vs Landing)</span>
+                            <h3 class="stat-val" id="detail-stat-prod">0.0 / 0.0</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monthly Trends Section -->
+                <h3 style="margin-bottom: 1rem; color: var(--text-primary);"><i class="fa-solid fa-chart-bar"></i> แนวโน้มรายเดือน (Monthly Trends)</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+                    <div class="chart-container card" style="padding: 1.5rem;">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-box-open"></i> Throughput Volume (Monthly)</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="monthlyVolChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container card" style="padding: 1.5rem;">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-user-group"></i> Net FTE (Monthly)</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="monthlyFteChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container card" style="padding: 1.5rem;">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-gauge-high"></i> Productivity (Monthly)</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="monthlyProdChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Trends Section -->
+                <h3 style="margin-bottom: 1rem; color: var(--text-primary);"><i class="fa-solid fa-chart-line"></i> แนวโน้มรายวัน (Daily Trends)</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+                    <div class="chart-container card" style="padding: 1.5rem;">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-dolly"></i> Throughput Volume (Daily)</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="dailyVolChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container card" style="padding: 1.5rem;">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-user-clock"></i> FTE Normal & OT (Daily)</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="dailyFteChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container card" style="padding: 1.5rem;">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-arrow-trend-up"></i> Productivity (Daily)</h3>
+                        </div>
+                        <div class="chart-wrapper" style="height: 250px;">
+                            <canvas id="dailyProdChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Table Detail Card -->
+                <div class="card detail-table-card" style="padding: 1.5rem; margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h3><i class="fa-solid fa-calendar-day"></i> ตารางรายละเอียดรายวัน (Daily Breakdown)</h3>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table daily-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>วันที่ (Date)</th>
+                                    <th class="highlight-col">Net Daily FTE</th>
+                                    <th>Daily Volume</th>
+                                    <th>Daily Productivity</th>
+                                    <th>FTE Normal</th>
+                                    <th>FTE OT</th>
+                                    <th>Adjust FTE Normal -</th>
+                                    <th>Adjust FTE OT -</th>
+                                    <th>Adjust FTE Normal +</th>
+                                    <th>Adjust FTE OT +</th>
+                                    <th>OS FTE Normal</th>
+                                    <th>OS FTE OT</th>
+                                </tr>
+                            </thead>
+                            <tbody id="daily-table-body">
+                                <tr>
+                                    <td colspan="12" class="empty-state">กรุณาเลือกศูนย์ต้นทุนด้านบนเพื่อโหลดรายละเอียด...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. CONFIGURATION / CREDENTIALS VIEW -->
+            <section class="view-section" id="view-config">
+                <div class="card form-card" style="padding: 2rem;">
+                    <div class="card-header" style="margin-bottom: 2rem;">
+                        <h2><i class="fa-solid fa-key"></i> ตั้งค่าการเชื่อมต่อฐานข้อมูล Supabase</h2>
+                        <p class="subtitle">ระบุข้อมูล API เพื่อเชื่อมต่อระบบแดชบอร์ดเข้ากับฐานข้อมูลจริง</p>
+                    </div>
+                    <form id="config-form" class="config-form">
+                        <div class="form-group" style="margin-bottom: 1.5rem;">
+                            <label for="supabase-url" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Supabase Project URL</label>
+                            <input type="url" id="supabase-url" placeholder="https://xxxxxx.supabase.co" required style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-sm); border: 1px solid var(--glass-border); background: var(--bg-secondary); color: var(--text-primary);">
+                            <small class="form-help" style="color: var(--text-secondary); display: block; margin-top: 0.3rem;">Project Settings > API > Project URL</small>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 2rem;">
+                            <label for="supabase-anon-key" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Supabase Public Anon Key</label>
+                            <input type="password" id="supabase-anon-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-sm); border: 1px solid var(--glass-border); background: var(--bg-secondary); color: var(--text-primary);">
+                            <small class="form-help" style="color: var(--text-secondary); display: block; margin-top: 0.3rem;">Project Settings > API > Project API keys (anon public)</small>
+                        </div>
+                        <div class="form-actions" style="display: flex; gap: 1rem;">
+                            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> บันทึกค่าเชื่อมต่อ</button>
+                            <button type="button" class="btn btn-outline" id="btn-clear-config"><i class="fa-solid fa-trash-can"></i> ล้างการเชื่อมต่อ</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Script App -->
+    <script src="mock_data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
