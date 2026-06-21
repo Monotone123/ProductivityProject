@@ -3,7 +3,7 @@ name: Daily Supabase ETL Sync
 on:
   schedule:
     - cron: '0 18 * * *'
-  workflow_dispatch: # ทำให้มีปุ่มกดมือได้
+  workflow_dispatch:
 
 jobs:
   run-etl:
