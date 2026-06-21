@@ -367,6 +367,18 @@ def calculate_aggregations(payroll_recs, emp_recs, adjust_recs, os_recs, prod_re
     df_os = pd.DataFrame(os_recs)
     df_prod = pd.DataFrame(prod_recs)
     
+    # Ensure expected columns exist even if empty
+    if df_payroll.empty:
+        df_payroll = pd.DataFrame(columns=['record_id', 'employee_id', 'pay_code', 'pay_code_description', 'earning_code', 'hours_py', 'hours', 'minutes', 'planned_hour', 'planned_hours', 'planned_minutes', 'count_val', 'days_val', 'amount', 'period_end', 'work_date', 'correction', 'cost_center'])
+    if df_emp.empty:
+        df_emp = pd.DataFrame(columns=['employee_id', 'first_name', 'last_name', 'organization_name', 'position_name', 'job_name', 'cost_center', 'level_name'])
+    if df_adjust.empty:
+        df_adjust = pd.DataFrame(columns=['employee_id', 'name', 'check_in', 'check_out', 'work_normal', 'ot_1', 'ot_1_5', 'ot_3', 'cost_center_departure', 'cost_center_departure_name', 'cost_center_destination', 'cost_center_destination_name', 'work_date'])
+    if df_os.empty:
+        df_os = pd.DataFrame(columns=['employee_id', 'first_name', 'last_name', 'site', 'clock_in', 'clock_out', 'working_hours', 'cost_center_origin', 'cost_center_transfer', 'pay_type', 'work_date'])
+    if df_prod.empty:
+        df_prod = pd.DataFrame(columns=['cost_center', 'scdc_site', 'uom', 'volume', 'work_date', 'group_type'])
+    
     # 1. Map Cost Centers on payroll
     if not df_payroll.empty and not df_emp.empty:
         df_emp['employee_id'] = df_emp['employee_id'].astype(str).str.strip()
@@ -882,6 +894,26 @@ def run_etl():
     prod_recs = process_productivity_report(prod_path)
     
     # ------------------------------------------
+    # STEP 2.5: Filter datasets to target range (2026-04-01 to 2026-06-30)
+    # to significantly reduce database transaction size and prevent timeouts.
+    # ------------------------------------------
+    start_date = "2026-04-01"
+    end_date = "2026-06-30"
+    target_months = ['2026-04', '2026-05', '2026-06']
+
+    payroll_recs = [r for r in payroll_recs if r.get('work_date') and start_date <= r['work_date'] <= end_date]
+    adjust_recs = [r for r in adjust_recs if r.get('work_date') and start_date <= r['work_date'] <= end_date]
+    os_recs = [r for r in os_recs if r.get('work_date') and start_date <= r['work_date'] <= end_date]
+    prod_recs = [r for r in prod_recs if r.get('work_date') and start_date <= r['work_date'] <= end_date]
+    
+    print(f"Filtered records to range {start_date} to {end_date}:")
+    print(f"  - Payroll records: {len(payroll_recs)}")
+    print(f"  - Employee master records: {len(emp_recs)}")
+    print(f"  - Adjust records: {len(adjust_recs)}")
+    print(f"  - Outsource records: {len(os_recs)}")
+    print(f"  - Productivity records: {len(prod_recs)}")
+
+    # ------------------------------------------
     # STEP 3: Run Aggregation Engine
     # ------------------------------------------
     monthly_summaries, daily_details = calculate_aggregations(
@@ -917,9 +949,9 @@ def run_etl():
                     print(f"Error loading Employee Master batch starting at {i}: {e}")
                     
         # B. Upsert Payroll Report
-        print("Clearing old Payroll records from Supabase...")
+        print(f"Clearing old Payroll records from Supabase for range {start_date} to {end_date}...")
         try:
-            supabase.table("payroll_report").delete().neq("record_id", "").execute()
+            supabase.table("payroll_report").delete().gte("work_date", start_date).lte("work_date", end_date).execute()
         except Exception as e:
             print(f"Error clearing Payroll records: {e}")
 
@@ -933,9 +965,9 @@ def run_etl():
                     print(f"Error loading Payroll batch starting at {i}: {e}")
                     
         # C. Insert/Upsert Adjust Report
-        print("Clearing old Adjust records from Supabase...")
+        print(f"Clearing old Adjust records from Supabase for range {start_date} to {end_date}...")
         try:
-            supabase.table("adjust_report").delete().neq("id", -1).execute()
+            supabase.table("adjust_report").delete().gte("work_date", start_date).lte("work_date", end_date).execute()
         except Exception as e:
             print(f"Error clearing Adjust records: {e}")
 
@@ -949,9 +981,9 @@ def run_etl():
                     print(f"Error loading Adjust records: {e}")
                 
         # D. Insert/Upsert Outsource Report
-        print("Clearing old Outsource records from Supabase...")
+        print(f"Clearing old Outsource records from Supabase for range {start_date} to {end_date}...")
         try:
-            supabase.table("outsource_report").delete().neq("id", -1).execute()
+            supabase.table("outsource_report").delete().gte("work_date", start_date).lte("work_date", end_date).execute()
         except Exception as e:
             print(f"Error clearing Outsource records: {e}")
 
@@ -965,9 +997,9 @@ def run_etl():
                     print(f"Error loading Outsource records: {e}")
                 
         # E. Insert/Upsert Productivity Report
-        print("Clearing old Productivity records from Supabase...")
+        print(f"Clearing old Productivity records from Supabase for range {start_date} to {end_date}...")
         try:
-            supabase.table("productivity_report").delete().neq("id", -1).execute()
+            supabase.table("productivity_report").delete().gte("work_date", start_date).lte("work_date", end_date).execute()
         except Exception as e:
             print(f"Error clearing Productivity records: {e}")
 
@@ -981,9 +1013,9 @@ def run_etl():
                     print(f"Error loading Productivity records: {e}")
                 
         # F. Upsert Monthly Productivity Summary
-        print("Clearing old Monthly Summaries from Supabase...")
+        print(f"Clearing old Monthly Summaries from Supabase for months {target_months}...")
         try:
-            supabase.table("monthly_productivity_summary").delete().neq("month", "").execute()
+            supabase.table("monthly_productivity_summary").delete().in_("month", target_months).execute()
         except Exception as e:
             print(f"Error clearing Monthly Summaries: {e}")
 
