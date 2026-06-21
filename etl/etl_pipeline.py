@@ -902,6 +902,12 @@ def run_etl():
         
         # A. Upsert Employee Master
         if emp_recs:
+            print("Clearing old Employee Master records from Supabase...")
+            try:
+                supabase.table("employee_master").delete().neq("employee_id", "").execute()
+            except Exception as e:
+                print(f"Error clearing Employee Master records: {e}")
+
             print(f"Uploading {len(emp_recs)} Employee Master records to Supabase...")
             for i in range(0, len(emp_recs), BATCH_SIZE):
                 batch = emp_recs[i:i + BATCH_SIZE]
@@ -912,6 +918,12 @@ def run_etl():
                     
         # B. Upsert Payroll Report
         if payroll_recs:
+            print("Clearing old Payroll records from Supabase...")
+            try:
+                supabase.table("payroll_report").delete().neq("record_id", "").execute()
+            except Exception as e:
+                print(f"Error clearing Payroll records: {e}")
+
             print(f"Uploading {len(payroll_recs)} Payroll records to Supabase...")
             for i in range(0, len(payroll_recs), BATCH_SIZE):
                 batch = payroll_recs[i:i + BATCH_SIZE]
@@ -957,6 +969,12 @@ def run_etl():
                 
         # F. Upsert Monthly Productivity Summary
         if monthly_summaries:
+            print("Clearing old Monthly Summaries from Supabase...")
+            try:
+                supabase.table("monthly_productivity_summary").delete().neq("month", "").execute()
+            except Exception as e:
+                print(f"Error clearing Monthly Summaries: {e}")
+
             print(f"Uploading {len(monthly_summaries)} Monthly Productivity Summaries to Supabase...")
             for i in range(0, len(monthly_summaries), BATCH_SIZE):
                 batch = monthly_summaries[i:i + BATCH_SIZE]
