@@ -901,13 +901,13 @@ def run_etl():
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         
         # A. Upsert Employee Master
-        if emp_recs:
-            print("Clearing old Employee Master records from Supabase...")
-            try:
-                supabase.table("employee_master").delete().neq("employee_id", "").execute()
-            except Exception as e:
-                print(f"Error clearing Employee Master records: {e}")
+        print("Clearing old Employee Master records from Supabase...")
+        try:
+            supabase.table("employee_master").delete().neq("employee_id", "").execute()
+        except Exception as e:
+            print(f"Error clearing Employee Master records: {e}")
 
+        if emp_recs:
             print(f"Uploading {len(emp_recs)} Employee Master records to Supabase...")
             for i in range(0, len(emp_recs), BATCH_SIZE):
                 batch = emp_recs[i:i + BATCH_SIZE]
@@ -917,13 +917,13 @@ def run_etl():
                     print(f"Error loading Employee Master batch starting at {i}: {e}")
                     
         # B. Upsert Payroll Report
-        if payroll_recs:
-            print("Clearing old Payroll records from Supabase...")
-            try:
-                supabase.table("payroll_report").delete().neq("record_id", "").execute()
-            except Exception as e:
-                print(f"Error clearing Payroll records: {e}")
+        print("Clearing old Payroll records from Supabase...")
+        try:
+            supabase.table("payroll_report").delete().neq("record_id", "").execute()
+        except Exception as e:
+            print(f"Error clearing Payroll records: {e}")
 
+        if payroll_recs:
             print(f"Uploading {len(payroll_recs)} Payroll records to Supabase...")
             for i in range(0, len(payroll_recs), BATCH_SIZE):
                 batch = payroll_recs[i:i + BATCH_SIZE]
@@ -933,48 +933,61 @@ def run_etl():
                     print(f"Error loading Payroll batch starting at {i}: {e}")
                     
         # C. Insert/Upsert Adjust Report
+        print("Clearing old Adjust records from Supabase...")
+        try:
+            supabase.table("adjust_report").delete().neq("id", -1).execute()
+        except Exception as e:
+            print(f"Error clearing Adjust records: {e}")
+
         if adjust_recs:
             print(f"Uploading {len(adjust_recs)} Adjust records to Supabase...")
-            # Truncating / clearing table first is standard for daily reports or using upsert with id
-            try:
-                # Direct deletion then insert is simple if table doesn't have upsert conflict key
-                supabase.table("adjust_report").delete().neq("id", -1).execute()
-                for i in range(0, len(adjust_recs), BATCH_SIZE):
-                    batch = adjust_recs[i:i + BATCH_SIZE]
+            for i in range(0, len(adjust_recs), BATCH_SIZE):
+                batch = adjust_recs[i:i + BATCH_SIZE]
+                try:
                     supabase.table("adjust_report").insert(batch).execute()
-            except Exception as e:
-                print(f"Error loading Adjust records: {e}")
+                except Exception as e:
+                    print(f"Error loading Adjust records: {e}")
                 
         # D. Insert/Upsert Outsource Report
+        print("Clearing old Outsource records from Supabase...")
+        try:
+            supabase.table("outsource_report").delete().neq("id", -1).execute()
+        except Exception as e:
+            print(f"Error clearing Outsource records: {e}")
+
         if os_recs:
             print(f"Uploading {len(os_recs)} Outsource records to Supabase...")
-            try:
-                supabase.table("outsource_report").delete().neq("id", -1).execute()
-                for i in range(0, len(os_recs), BATCH_SIZE):
-                    batch = os_recs[i:i + BATCH_SIZE]
+            for i in range(0, len(os_recs), BATCH_SIZE):
+                batch = os_recs[i:i + BATCH_SIZE]
+                try:
                     supabase.table("outsource_report").insert(batch).execute()
-            except Exception as e:
-                print(f"Error loading Outsource records: {e}")
+                except Exception as e:
+                    print(f"Error loading Outsource records: {e}")
                 
         # E. Insert/Upsert Productivity Report
+        print("Clearing old Productivity records from Supabase...")
+        try:
+            supabase.table("productivity_report").delete().neq("id", -1).execute()
+        except Exception as e:
+            print(f"Error clearing Productivity records: {e}")
+
         if prod_recs:
             print(f"Uploading {len(prod_recs)} Productivity records to Supabase...")
-            try:
-                supabase.table("productivity_report").delete().neq("id", -1).execute()
-                for i in range(0, len(prod_recs), BATCH_SIZE):
-                    batch = prod_recs[i:i + BATCH_SIZE]
+            for i in range(0, len(prod_recs), BATCH_SIZE):
+                batch = prod_recs[i:i + BATCH_SIZE]
+                try:
                     supabase.table("productivity_report").insert(batch).execute()
-            except Exception as e:
-                print(f"Error loading Productivity records: {e}")
+                except Exception as e:
+                    print(f"Error loading Productivity records: {e}")
                 
         # F. Upsert Monthly Productivity Summary
-        if monthly_summaries:
-            print("Clearing old Monthly Summaries from Supabase...")
-            try:
-                supabase.table("monthly_productivity_summary").delete().neq("month", "").execute()
-            except Exception as e:
-                print(f"Error clearing Monthly Summaries: {e}")
+        print("Clearing old Monthly Summaries from Supabase...")
+        try:
+            supabase.table("monthly_productivity_summary").delete().neq("month", "").execute()
+        except Exception as e:
+            print(f"Error clearing Monthly Summaries: {e}")
 
+        if monthly_summaries:
             print(f"Uploading {len(monthly_summaries)} Monthly Productivity Summaries to Supabase...")
             for i in range(0, len(monthly_summaries), BATCH_SIZE):
                 batch = monthly_summaries[i:i + BATCH_SIZE]
