@@ -1,0 +1,38 @@
+name: Daily Supabase ETL Sync
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch: # ทำให้มีปุ่มกดมือได้
+
+jobs:
+  run-etl:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas openpyxl supabase requests
+
+    - name: Run ETL Pipeline Job
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        GDRIVE_SHARE_LINK: ${{ secrets.GDRIVE_SHARE_LINK }}
+        GDRIVE_EMP_MASTER: ${{ secrets.GDRIVE_EMP_MASTER }}
+        GDRIVE_ADJUST: ${{ secrets.GDRIVE_ADJUST }}
+        GDRIVE_OS_NORMAL: ${{ secrets.GDRIVE_OS_NORMAL }}
+        GDRIVE_OS_OT: ${{ secrets.GDRIVE_OS_OT }}
+        GDRIVE_PROD: ${{ secrets.GDRIVE_PROD }}
+      run: |
+        python etl/etl_pipeline.py
