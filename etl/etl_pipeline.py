@@ -741,57 +741,145 @@ const MOCK_DAILY_RECORDS = {json.dumps(daily_records, indent=2, ensure_ascii=Fal
     except Exception as e:
         print(f"Failed to save fallback mock data to {dest_path}: {e}")
 
+def download_file_from_gdrive(env_var_name, default_local_path):
+    link = os.environ.get(env_var_name)
+    if not link:
+        return default_local_path
+    
+    print(f"Downloading {env_var_name} from Google Drive: {link}")
+    dl_url = get_google_drive_direct_url(link)
+    if not dl_url:
+        print(f"Could not convert Google Drive link for {env_var_name}, using local fallback: {default_local_path}")
+        return default_local_path
+        
+    try:
+        response = requests.get(dl_url)
+        if response.status_code == 200:
+            local_temp_name = f"temp_{env_var_name.lower()}.xlsx"
+            with open(local_temp_name, "wb") as lf:
+                lf.write(response.content)
+            return local_temp_name
+        else:
+            print(f"Failed to download {env_var_name} (Status {response.status_code}), using local fallback: {default_local_path}")
+    except Exception as e:
+        print(f"Error downloading {env_var_name}: {e}, using local fallback: {default_local_path}")
+        
+    return default_local_path
+
 def run_etl():
     print("=== Start Google Drive/Local to Supabase Unified ETL Pipeline ===")
     
     payroll_files = []
+    gdrive_files = []
     
     # ------------------------------------------
-    # STEP 1: Extract Folder 1 (Payroll CSVs)
+    # STEP 1: Scan Google Drive Folder if provided
     # ------------------------------------------
-    if LOCAL_FILE_PATH and os.path.exists(LOCAL_FILE_PATH):
+    if GDRIVE_SHARE_LINK and "folders/" in GDRIVE_SHARE_LINK:
+        gdrive_files = scan_google_drive_folder(GDRIVE_SHARE_LINK)
+        
+    # Track paths of files to process
+    emp_master_path = EMP_MASTER_FILE
+    adjust_path = ADJUST_FILE
+    os_normal_path = OS_NORMAL_FILE
+    os_ot_path = OS_OT_FILE
+    prod_path = PROD_FILE
+
+    # Helper function to find a file in the scanned Google Drive folder by matching substring
+    def find_gdrive_file(keyword, extension=".xlsx"):
+        for f in gdrive_files:
+            fname = f['name'].lower()
+            if keyword.lower() in fname and (fname.endswith(extension) or fname.endswith('.xls')):
+                return f
+        return None
+
+    # Helper function to download a file from Google Drive if found
+    def download_matched_file(f, default_local_path):
+        if not f:
+            return default_local_path
+        print(f"Matched file in Google Drive: {f['name']}")
+        try:
+            print(f"Downloading {f['name']}...")
+            response = requests.get(f['download_url'])
+            if response.status_code == 200:
+                local_temp_name = f"temp_{f['name'].replace(' ', '_')}"
+                with open(local_temp_name, "wb") as lf:
+                    lf.write(response.content)
+                return local_temp_name
+            else:
+                print(f"Failed to download {f['name']} (Status {response.status_code}), using local fallback: {default_local_path}")
+        except Exception as e:
+            print(f"Error downloading {f['name']}: {e}, using local fallback: {default_local_path}")
+        return default_local_path
+
+    # Process files from Google Drive
+    if gdrive_files:
+        # A. Payroll CSV files (all CSV files in the folder)
+        for f in gdrive_files:
+            if f['name'].endswith('.csv'):
+                try:
+                    print(f"Downloading payroll file: {f['name']}")
+                    response = requests.get(f['download_url'])
+                    if response.status_code == 200:
+                        local_name = f"downloaded_{f['id']}.csv"
+                        with open(local_name, "wb") as lf:
+                            lf.write(response.content)
+                        payroll_files.append(local_name)
+                except Exception as e:
+                    print(f"Failed to download payroll file {f['name']}: {e}")
+                    
+        # B. Other Excel files (first check if they exist in the scanned folder)
+        emp_master_path = download_matched_file(find_gdrive_file("Employee_Master") or find_gdrive_file("Employee Master"), EMP_MASTER_FILE)
+        adjust_path = download_matched_file(find_gdrive_file("Adjust FTE") or find_gdrive_file("Adjust_FTE"), ADJUST_FILE)
+        os_normal_path = download_matched_file(find_gdrive_file("OS (Normal)") or find_gdrive_file("OS Normal") or find_gdrive_file("OS_Normal"), OS_NORMAL_FILE)
+        os_ot_path = download_matched_file(find_gdrive_file("OS (OT)") or find_gdrive_file("OS OT") or find_gdrive_file("OS_OT"), OS_OT_FILE)
+        prod_path = download_matched_file(find_gdrive_file("Productivity"), PROD_FILE)
+
+    # ------------------------------------------
+    # STEP 1.5: Fallback to individual env vars if not downloaded from the folder
+    # ------------------------------------------
+    if emp_master_path == EMP_MASTER_FILE:
+        emp_master_path = download_file_from_gdrive("GDRIVE_EMP_MASTER", EMP_MASTER_FILE)
+    if adjust_path == ADJUST_FILE:
+        adjust_path = download_file_from_gdrive("GDRIVE_ADJUST", ADJUST_FILE)
+    if os_normal_path == OS_NORMAL_FILE:
+        os_normal_path = download_file_from_gdrive("GDRIVE_OS_NORMAL", OS_NORMAL_FILE)
+    if os_ot_path == OS_OT_FILE:
+        os_ot_path = download_file_from_gdrive("GDRIVE_OS_OT", OS_OT_FILE)
+    if prod_path == PROD_FILE:
+        prod_path = download_file_from_gdrive("GDRIVE_PROD", PROD_FILE)
+
+    # If GDRIVE_SHARE_LINK was a direct CSV file link instead of a folder
+    if not gdrive_files and GDRIVE_SHARE_LINK and "folders/" not in GDRIVE_SHARE_LINK:
+        dl_url = get_google_drive_direct_url(GDRIVE_SHARE_LINK)
+        if dl_url:
+            try:
+                response = requests.get(dl_url)
+                if response.status_code == 200:
+                    local_name = "downloaded_file.csv"
+                    with open(local_name, "wb") as lf:
+                        lf.write(response.content)
+                    payroll_files.append(local_name)
+            except Exception as e:
+                print(f"Failed to download file: {e}")
+
+    # Fallback to local files if LOCAL_FILE_PATH is provided
+    if not payroll_files and LOCAL_FILE_PATH and os.path.exists(LOCAL_FILE_PATH):
         print(f"Local file path provided: {LOCAL_FILE_PATH}")
         if os.path.isdir(LOCAL_FILE_PATH):
             import glob
             payroll_files = glob.glob(os.path.join(LOCAL_FILE_PATH, "*.csv"))
         else:
             payroll_files = [LOCAL_FILE_PATH]
-    elif GDRIVE_SHARE_LINK:
-        if "folders/" in GDRIVE_SHARE_LINK:
-            files_found = scan_google_drive_folder(GDRIVE_SHARE_LINK)
-            for f in files_found:
-                if f['name'].endswith('.csv'):
-                    try:
-                        print(f"Downloading payroll file: {f['name']}")
-                        response = requests.get(f['download_url'])
-                        if response.status_code == 200:
-                            local_name = f"downloaded_{f['id']}.csv"
-                            with open(local_name, "wb") as lf:
-                                lf.write(response.content)
-                            payroll_files.append(local_name)
-                    except Exception as e:
-                        print(f"Failed to download folder file {f['name']}: {e}")
-        else:
-            dl_url = get_google_drive_direct_url(GDRIVE_SHARE_LINK)
-            if dl_url:
-                try:
-                    response = requests.get(dl_url)
-                    if response.status_code == 200:
-                        local_name = "downloaded_file.csv"
-                        with open(local_name, "wb") as lf:
-                            lf.write(response.content)
-                        payroll_files.append(local_name)
-                except Exception as e:
-                    print(f"Failed to download file: {e}")
-                    
+
     # ------------------------------------------
     # STEP 2: Process Raw Daily Data Frames
     # ------------------------------------------
     payroll_recs = process_payroll_files(payroll_files)
-    emp_recs = process_employee_master(EMP_MASTER_FILE)
-    adjust_recs = process_adjust_report(ADJUST_FILE)
-    os_recs = process_outsource_report(OS_NORMAL_FILE, OS_OT_FILE)
-    prod_recs = process_productivity_report(PROD_FILE)
+    emp_recs = process_employee_master(emp_master_path)
+    adjust_recs = process_adjust_report(adjust_path)
+    os_recs = process_outsource_report(os_normal_path, os_ot_path)
+    prod_recs = process_productivity_report(prod_path)
     
     # ------------------------------------------
     # STEP 3: Run Aggregation Engine
@@ -889,6 +977,11 @@ def run_etl():
             if os.path.exists(file):
                 os.remove(file)
                 
+    # Clean up downloaded report files
+    for temp_file in [emp_master_path, adjust_path, os_normal_path, os_ot_path, prod_path]:
+        if temp_file and "temp_" in temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
+            
     print("=== ETL Pipeline Completed Successfully! ===")
 
 if __name__ == "__main__":
